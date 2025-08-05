@@ -316,6 +316,12 @@ async def on_cancel_action(call: CallbackQuery, state: FSMContext):
 
 @user_router.callback_query(F.data == "help_info")
 async def on_help_info(call: CallbackQuery):
+    help_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="confirm_registration")]
+        ]
+    )
+
     await call.message.edit_text(
         f"{hbold('Доступные команды:')}\n\n"
         "/start - Начать работу с ботом\n"
@@ -324,7 +330,8 @@ async def on_help_info(call: CallbackQuery):
         f"{hbold('О сервисе:')}\n"
         "Random Coffee - это возможность познакомиться "
         "с коллегами в неформальной обстановке.\n\n"
-        "По всем вопросам обращайтесь к администратору."
+        "По всем вопросам обращайтесь к администратору.",
+        reply_markup=help_kb,
     )
     await call.answer()
 
@@ -418,6 +425,11 @@ async def on_profile_info(call: CallbackQuery):
             [
                 InlineKeyboardButton(
                     text="❌ Отписаться", callback_data="confirm_unsubscribe"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Назад", callback_data="confirm_registration"
                 )
             ],
         ]
