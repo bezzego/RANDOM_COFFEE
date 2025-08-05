@@ -208,13 +208,23 @@ async def on_confirm_registration(call: CallbackQuery, state: FSMContext):
     user_id = call.from_user.id
     username = call.from_user.username or ""
 
+    # Новые поля
+    first_name = data.get("first_name", "")
+    last_name = data.get("last_name", "")
+    position = data.get("position", "")
+    department = data.get("department", "")
+    full_name = f"{first_name} {last_name}"
+    frequency = 1  # по умолчанию раз в неделю
+
     new_user = db.ensure_user(
         user_id=user_id,
         username=username,
-        first_name=data.get("first_name", ""),
-        last_name=data.get("last_name", ""),
-        position=data.get("position", ""),
-        department=data.get("department", ""),
+        first_name=first_name,
+        last_name=last_name,
+        full_name=full_name,
+        position=position,
+        department=department,
+        frequency=frequency,
     )
 
     if new_user:
