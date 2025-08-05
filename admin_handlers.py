@@ -100,26 +100,34 @@ async def pair_users(bot: Bot, force_all=False) -> dict:
         uname1_clean = uname1.strip("@") if uname1 else "username_not_available"
         uname2_clean = uname2.strip("@") if uname2 else "username_not_available"
 
-        department2 = user2[5] if user2[5] else "не указан"
+        position2 = user2[3] if len(user2) > 3 and user2[3] else "не указан"
+        department2 = user2[4] if len(user2) > 4 and user2[4] else "не указан"
+        if uname2:
+            contact2 = f"📱 {hbold('Контакты:')} @{uname2}\n"
+        else:
+            contact2 = "📱 (нет username)\n"
         partner_msg_1 = (
             f"☕ {hbold('Новый партнер для Random Coffee!')}\n\n"
             f"👤 {hbold('Имя:')} {name2}\n"
-            f"💼 {hbold('Должность:')} {user2[4]}\n"
+            f"💼 {hbold('Должность:')} {position2}\n"
             f"🏢 {hbold('Отдел:')} {department2}\n"
-            f"📱 {hbold('Контакты:')} @{uname2}"
-            if uname2
-            else " (нет username)" "\n\nДоговоритесь о времени встречи на этой неделе!"
+            f"{contact2}\n"
+            "Теперь ты можешь написать своему партнеру и договориться о встрече на этой неделе."
         )
 
-        department1 = user1[5] if user1[5] else "не указан"
+        position1 = user1[3] if len(user1) > 3 and user1[3] else "не указан"
+        department1 = user1[4] if len(user1) > 4 and user1[4] else "не указан"
+        if uname1:
+            contact1 = f"📱 {hbold('Контакты:')} @{uname1}\n"
+        else:
+            contact1 = "📱 (нет username)\n"
         partner_msg_2 = (
             f"☕ {hbold('Новый партнер для Random Coffee!')}\n\n"
             f"👤 {hbold('Имя:')} {name1}\n"
-            f"💼 {hbold('Должность:')} {user1[4]}\n"
+            f"💼 {hbold('Должность:')} {position1}\n"
             f"🏢 {hbold('Отдел:')} {department1}\n"
-            f"📱 {hbold('Контакты:')} @{uname1}"
-            if uname1
-            else " (нет username)" "\n\nДоговоритесь о времени встречи на этой неделе!"
+            f"{contact1}\n"
+            "Теперь ты можешь написать своему партнеру и договориться о встрече на этой неделе."
         )
 
         success = True
