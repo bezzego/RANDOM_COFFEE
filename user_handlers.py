@@ -125,7 +125,7 @@ async def process_last_name(message: Message, state: FSMContext):
 @user_router.message(RegistrationStates.position)
 async def process_position(message: Message, state: FSMContext):
     position = message.text.strip()
-    if len(position) < 3:
+    if len(position) < 2:
         await message.answer(
             "❌ Должность слишком короткая. Пожалуйста, укажите корректно."
         )
@@ -147,7 +147,7 @@ async def process_position(message: Message, state: FSMContext):
 @user_router.message(RegistrationStates.department)
 async def process_department(message: Message, state: FSMContext):
     department = message.text.strip()
-    if len(department) < 3:
+    if len(department) < 2:
         await message.answer(
             "❌ Название отдела слишком короткое. Пожалуйста, укажите корректно."
         )
@@ -287,9 +287,9 @@ async def on_cancel_action(call: CallbackQuery, state: FSMContext):
     await call.answer()
 
 
-@user_router.message(Command("help"))
-async def cmd_help(message: Message):
-    await message.answer(
+@user_router.callback_query(F.data == "help_info")
+async def on_help_info(call: CallbackQuery):
+    await call.message.edit_text(
         f"{hbold('Доступные команды:')}\n\n"
         "/start - Начать работу с ботом\n"
         "/profile - Просмотреть/изменить профиль\n"
@@ -299,3 +299,67 @@ async def cmd_help(message: Message):
         "с коллегами в неформальной обстановке.\n\n"
         "По всем вопросам обращайтесь к администратору."
     )
+    await call.answer()
+
+
+@user_router.callback_query(F.data == "paired_confirmed")
+async def on_paired_confirmed(call: CallbackQuery):
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="☕ Продолжить участие", callback_data="continue_participation"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Отказаться от участия", callback_data="confirm_unsubscribe"
+                )
+            ],
+        ]
+    )
+
+    text = (
+        "🎉 Отлично, встреча назначена!\n\n"
+        "Хотите продолжить участие в Random Coffee на следующей неделе?"
+    )
+
+    await call.message.edit_text(text, reply_markup=kb)
+    await call.answer()
+
+
+@user_router.callback_query(F.data == "continue_participation")
+async def on_continue_participation(call: CallbackQuery):
+    text = "✅ Вы продолжите участие в Random Coffee! Новая пара будет в следующий понедельник."
+    await call.message.edit_text(text)
+    await call.answer()
+
+
+# Отправка напоминания после создания пары
+async def send_reminder_after_pairing(
+    user_id: int, partner_name: str, partner_contact: str, bot
+):
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✉️ Написать напарнику", url=f"https://t.me/{partner_contact}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="✅ Договорились", callback_data="paired_confirmed"
+                )
+            ],
+        ]
+    )
+
+    text = (
+        "👋 Привет!\n"
+        "Напоминаем, что ты участвуешь в Random Coffee на этой неделе ☕\n\n"
+        f"Уже договорился(ась) со своим напарником {partner_name}? Если ещё нет — напиши, это займёт меньше минуты :)\n\n"
+        "Цель — просто пообщаться. Узнать лучше своего коллегу: чем он занимается, что делает на работе, чем увлекается в свободное время.\n\n"
+        "Удачной встречи!"
+    )
+
+    await bot.send_message(chat_id=user_id, text=text, reply_markup=kb)
