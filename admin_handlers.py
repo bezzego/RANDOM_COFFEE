@@ -224,7 +224,11 @@ async def on_admin_broadcast(call: CallbackQuery):
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Отменить", callback_data="cancel_action")]
+            [
+                InlineKeyboardButton(
+                    text="❌ Отменить", callback_data="admin_back_to_menu"
+                )
+            ]
         ]
     )
 
@@ -248,7 +252,11 @@ async def on_admin_test_broadcast(call: CallbackQuery):
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Отменить", callback_data="cancel_action")]
+            [
+                InlineKeyboardButton(
+                    text="❌ Отменить", callback_data="admin_back_to_menu"
+                )
+            ]
         ]
     )
 
