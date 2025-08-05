@@ -74,16 +74,6 @@ async def cmd_start(message: Message, state: FSMContext):
 async def on_start_registration(call: CallbackQuery, state: FSMContext):
     user_id = call.from_user.id
     existing_user = db.get_user(user_id)
-
-    if existing_user and existing_user[9]:  # is_active
-        text = (
-            f"{hbold('⚠️ Вы уже зарегистрированы!')}\n\n"
-            f"Используйте /profile для просмотра или изменения данных."
-        )
-        await call.message.edit_text(text)
-        await call.answer()
-        return
-
     await state.clear()
     text = (
         "📝 Давайте начнем регистрацию. Это займет меньше минуты!\n\n"
