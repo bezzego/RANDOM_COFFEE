@@ -11,6 +11,21 @@ from aiogram.fsm.context import FSMContext
 from aiogram.utils.markdown import hbold, hitalic
 import db
 
+
+# /help command handler
+@user_router.message(Command("help"))
+async def cmd_help(message: Message):
+    await message.answer(
+        f"{hbold('Доступные команды:')}\n\n"
+        "/start - Начать работу с ботом\n"
+        "/profile - Просмотреть/изменить профиль\n"
+        "/help - Показать эту справку\n\n"
+        f"{hbold('О сервисе:')}\n"
+        "Random Coffee - это возможность познакомиться с коллегами в неформальной обстановке.\n\n"
+        "По всем вопросам обращайтесь к администратору."
+    )
+
+
 user_router = Router()
 
 
