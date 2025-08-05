@@ -82,7 +82,7 @@ def ensure_user(
 
     # Use parameterized queries and transaction
     with conn:
-        cur = conn.execute(
+        conn.execute(
             "INSERT INTO participants (user_id, username, first_name, last_name, full_name, "
             "position, department, frequency, is_active) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE) "
@@ -102,7 +102,7 @@ def ensure_user(
                 frequency,
             ),
         )
-        return cur.rowcount == 1
+        return True
 
 
 def get_user(user_id: int) -> Optional[Tuple]:
