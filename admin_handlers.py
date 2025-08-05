@@ -1,6 +1,8 @@
 import logging
 import random
 import datetime
+from user_handlers import send_reminder_after_pairing
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiogram import Router, Bot, F
 from aiogram.filters import Command
 from aiogram.types import (
@@ -17,6 +19,10 @@ from config import ADMIN_IDS
 
 admin_router = Router()
 awaiting_actions = {}  # user_id: action_type
+
+# Scheduler for reminders
+scheduler = AsyncIOScheduler()
+scheduler.start()
 
 
 def get_admin_keyboard():
@@ -90,17 +96,27 @@ async def pair_users(bot: Bot, force_all=False) -> dict:
         uname2 = user2[1]
         name2 = user2[2] if len(user2) > 2 else "Неизвестно"
 
+        # Обработка username для корректной передачи в напоминание (без @, не пустой)
+        uname1_clean = uname1.strip("@") if uname1 else "username_not_available"
+        uname2_clean = uname2.strip("@") if uname2 else "username_not_available"
+
+        department2 = user2[5] if user2[5] else "не указан"
         partner_msg_1 = (
             f"☕ {hbold('Новый партнер для Random Coffee!')}\n\n"
             f"👤 {hbold('Имя:')} {name2}\n"
+            f"💼 {hbold('Должность:')} {user2[4]}\n"
+            f"🏢 {hbold('Отдел:')} {department2}\n"
             f"📱 {hbold('Контакты:')} @{uname2}"
             if uname2
             else " (нет username)" "\n\nДоговоритесь о времени встречи на этой неделе!"
         )
 
+        department1 = user1[5] if user1[5] else "не указан"
         partner_msg_2 = (
             f"☕ {hbold('Новый партнер для Random Coffee!')}\n\n"
             f"👤 {hbold('Имя:')} {name1}\n"
+            f"💼 {hbold('Должность:')} {user1[4]}\n"
+            f"🏢 {hbold('Отдел:')} {department1}\n"
             f"📱 {hbold('Контакты:')} @{uname1}"
             if uname1
             else " (нет username)" "\n\nДоговоритесь о времени встречи на этой неделе!"
@@ -110,6 +126,20 @@ async def pair_users(bot: Bot, force_all=False) -> dict:
         try:
             await bot.send_message(uid1, partner_msg_1)
             await bot.send_message(uid2, partner_msg_2)
+            # Запланировать напоминание через 3 дня
+            run_date = datetime.datetime.now() + datetime.timedelta(days=3)
+            scheduler.add_job(
+                send_reminder_after_pairing,
+                trigger="date",
+                run_date=run_date,
+                args=[uid1, name2, uname2_clean, bot],
+            )
+            scheduler.add_job(
+                send_reminder_after_pairing,
+                trigger="date",
+                run_date=run_date,
+                args=[uid2, name1, uname1_clean, bot],
+            )
         except Exception as e:
             logging.error(f"Failed to notify pair {uid1} and {uid2}: {e}")
             result["failed_to_notify"].extend([uid1, uid2])
