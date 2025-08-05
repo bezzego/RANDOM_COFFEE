@@ -70,6 +70,7 @@ def ensure_user(
     username: str,
     first_name: str,
     last_name: str,
+    full_name: str,
     position: str,
     department: str,
     frequency: int = 1,
@@ -78,7 +79,6 @@ def ensure_user(
     Add or update user in the database.
     Returns True if new user was created, False if existing user was updated.
     """
-    full_name = f"{first_name} {last_name}".strip()
 
     # Use parameterized queries and transaction
     with conn:
