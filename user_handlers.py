@@ -219,7 +219,7 @@ async def on_confirm_registration(call: CallbackQuery, state: FSMContext):
         inline_keyboard=[
             [
                 InlineKeyboardButton(text="ℹ️ Помощь", callback_data="help_info"),
-                InlineKeyboardButton(text="👤 Профиль", callback_data="open_profile"),
+                InlineKeyboardButton(text="👤 Профиль", callback_data="profile_info"),
             ],
             [
                 InlineKeyboardButton(
@@ -238,13 +238,7 @@ async def on_confirm_registration(call: CallbackQuery, state: FSMContext):
 async def cmd_profile(message: Message):
     user_id = message.from_user.id
     user_data = db.get_user(user_id)
-
-    if not user_data:
-        await message.answer(
-            "❌ Вы еще не зарегистрированы в системе!\n"
-            "Используйте /start для регистрации."
-        )
-        return
+    _, _, first_name, last_name, full_name, position, department, *_ = user_data
 
     profile_kb = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -263,9 +257,9 @@ async def cmd_profile(message: Message):
 
     text = (
         f"{hbold('👤 Ваш профиль:')}\n\n"
-        f"Имя: {user_data[2]} {user_data[3]}\n"
-        f"Должность: {user_data[4]}\n"
-        f"Отдел: {user_data[5]}\n"
+        f"👤 {hbold('Имя:')}  {(first_name)} {(last_name)}\n"
+        f"💼 {hbold('Должность:')} {position}\n"
+        f"🏢 {hbold('Отдел:')} {department}\n"
         f"Статус: {'Активный ✅' if user_data[9] else 'Неактивный ❌'}\n\n"
         "Используйте кнопки ниже для управления профилем:"
     )
@@ -381,3 +375,47 @@ async def send_reminder_after_pairing(
     )
 
     await bot.send_message(chat_id=user_id, text=text, reply_markup=kb)
+
+
+@user_router.callback_query(F.data == "profile_info")
+async def on_profile_info(call: CallbackQuery):
+    user_id = call.from_user.id
+    user_data = db.get_user(user_id)
+
+    if not user_data:
+        await call.message.edit_text(
+            "❌ Вы еще не зарегистрированы в системе!\n"
+            "Используйте /start для регистрации."
+        )
+        await call.answer()
+        return
+
+    # Unpack fields
+    _, _, first_name, last_name, full_name, position, department, *_ = user_data
+
+    profile_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✏️ Обновить данные", callback_data="start_registration"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Отписаться", callback_data="confirm_unsubscribe"
+                )
+            ],
+        ]
+    )
+
+    text = (
+        f"{hbold('👤 Ваш профиль:')}\n\n"
+        f"👤 {hbold('Имя:')}  {(first_name)} {(last_name)}\n"
+        f"💼 {hbold('Должность:')} {position}\n"
+        f"🏢 {hbold('Отдел:')} {department}\n"
+        f"Статус: {'Активный ✅' if user_data[9] else 'Неактивный ❌'}\n\n"
+        "Используйте кнопки ниже для управления профилем:"
+    )
+
+    await call.message.edit_text(text, reply_markup=profile_kb)
+    await call.answer()
