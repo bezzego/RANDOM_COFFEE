@@ -12,6 +12,9 @@ from aiogram.utils.markdown import hbold, hitalic
 import db
 
 
+user_router = Router()
+
+
 # /help command handler
 @user_router.message(Command("help"))
 async def cmd_help(message: Message):
@@ -24,9 +27,6 @@ async def cmd_help(message: Message):
         "Random Coffee - это возможность познакомиться с коллегами в неформальной обстановке.\n\n"
         "По всем вопросам обращайтесь к администратору."
     )
-
-
-user_router = Router()
 
 
 class RegistrationStates(StatesGroup):
