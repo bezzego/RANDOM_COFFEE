@@ -328,7 +328,7 @@ async def on_cancel_action(call: CallbackQuery, state: FSMContext):
 async def on_help_info(call: CallbackQuery):
     help_kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data="confirm_registration")]
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_main")]
         ]
     )
 
@@ -343,6 +343,40 @@ async def on_help_info(call: CallbackQuery):
         "По всем вопросам обращайтесь к администратору.",
         reply_markup=help_kb,
     )
+    await call.answer()
+
+
+@user_router.callback_query(F.data == "back_to_main")
+async def on_back_to_main(call: CallbackQuery, state: FSMContext):
+    await state.clear()
+    user_id = call.from_user.id
+    existing_user = db.get_user(user_id)
+
+    if existing_user and existing_user[9]:  # is_active
+        text = (
+            f"С возвращением! Вы уже зарегистрированы в Random Coffee.\n"
+            f"Используйте /profile для просмотра или изменения данных."
+        )
+        await call.message.edit_text(text)
+        await call.answer()
+        return
+
+    text = (
+        "Привет! 👋 Добро пожаловать в Random Coffee!\n"
+        "Это корпоративный формат, в котором сотрудники из разных команд встречаются случайным образом — чтобы просто пообщаться, познакомиться, поделиться опытом или обсудить что угодно.\n"
+        "Мы формируем пары, и вы вместе идёте на кофе, обед или встречу после работы — выбор места по желанию.\n"
+        "🎯 Цель — налаживать связи внутри компании, узнавать новое и напоминать друг другу: мы — не только роли и функции, мы — команда.\n\n"
+        "📝 Как это работает:\n\n"
+        "1. Все желающие регистрируются и выбирают частоту участия в жеребьевке (раз в неделю или раз в месяц)\n"
+        "2. Назначается дата жеребьёвки\n"
+        "3. В назначенную дату тебе приходит имя партнера и как с ним можно связаться\n"
+        "4. Вы договариваетесь о встрече на этой неделе\n"
+        "5. Пьёте кофе, обсуждаете интересные темы.\n\n"
+        "🤝 Надеемся, это будет полезно и приятно.\n"
+        "Хорошей беседы и вкусного кофе ☕\n\n"
+        "Нажми кнопку ниже, чтобы присоединиться:"
+    )
+    await call.message.edit_text(text, reply_markup=get_start_kb())
     await call.answer()
 
 
@@ -437,11 +471,7 @@ async def on_profile_info(call: CallbackQuery):
                     text="❌ Отписаться", callback_data="confirm_unsubscribe"
                 )
             ],
-            [
-                InlineKeyboardButton(
-                    text="⬅️ Назад", callback_data="confirm_registration"
-                )
-            ],
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="after_registration")],
         ]
     )
 
@@ -455,4 +485,32 @@ async def on_profile_info(call: CallbackQuery):
     )
 
     await call.message.edit_text(text, reply_markup=profile_kb)
+    await call.answer()
+
+
+# after_registration handler
+@user_router.callback_query(F.data == "after_registration")
+async def on_after_registration(call: CallbackQuery):
+    text = (
+        f"🎉 {hbold('Регистрация завершена!')}\n\n"
+        "Теперь вы участник Random Coffee!\n\n"
+        "Каждую неделю вы будете получать нового собеседника. "
+        "Первое знакомство запланировано на ближайший понедельник."
+    )
+
+    complete_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="ℹ️ Помощь", callback_data="help_info"),
+                InlineKeyboardButton(text="👤 Профиль", callback_data="profile_info"),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🚪 Выйти из бота", callback_data="confirm_unsubscribe"
+                )
+            ],
+        ]
+    )
+
+    await call.message.edit_text(text, reply_markup=complete_kb)
     await call.answer()
