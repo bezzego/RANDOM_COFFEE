@@ -44,6 +44,11 @@ def get_admin_keyboard():
         InlineKeyboardButton(text="👥 Список участников", callback_data="admin_list"),
         InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats"),
     )
+    builder.row(
+        InlineKeyboardButton(
+            text="🗑 Удалить пользователя", callback_data="admin_delete_user"
+        )
+    )
     return builder.as_markup()
 
 
@@ -506,3 +511,53 @@ async def on_admin_message(message: Message, bot: Bot):
 
         await message.answer(text, reply_markup=get_admin_keyboard())
         awaiting_actions.pop(message.from_user.id, None)
+
+
+# --- Новый обработчик: Удаление пользователя ---
+
+
+@admin_router.callback_query(F.data == "admin_delete_user")
+async def on_admin_delete_user(call: CallbackQuery):
+    if call.from_user.id not in ADMIN_IDS:
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    users = db.get_all_users()
+    if not users:
+        await call.message.answer("ℹ️ Нет зарегистрированных пользователей.")
+        return
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"{u[2]} (@{u[1]})" if u[1] else u[2],
+                    callback_data=f"admin_delete_confirm:{u[0]}",
+                )
+            ]
+            for u in users[:10]  # только первые 10
+        ]
+        + [[InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_to_menu")]]
+    )
+
+    await call.message.edit_text(
+        f"{hbold('🗑 Удаление пользователя')}\n\n"
+        "Выберите пользователя для удаления (показаны первые 10):",
+        reply_markup=keyboard,
+    )
+    await call.answer()
+
+
+@admin_router.callback_query(F.data.startswith("admin_delete_confirm:"))
+async def on_admin_delete_confirm(call: CallbackQuery):
+    if call.from_user.id not in ADMIN_IDS:
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    user_id = int(call.data.split(":")[1])
+    db.delete_user(user_id)
+
+    await call.message.edit_text(
+        f"✅ Пользователь {user_id} удален.", reply_markup=get_admin_keyboard()
+    )
+    await call.answer()

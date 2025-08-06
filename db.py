@@ -197,6 +197,13 @@ def get_user_stats() -> dict:
     return stats
 
 
+def delete_user(user_id: int) -> bool:
+    """Completely delete a user from the database."""
+    with conn:
+        cur = conn.execute("DELETE FROM participants WHERE user_id = ?", (user_id,))
+        return cur.rowcount > 0
+
+
 def close_connection():
     """Properly close database connection."""
     conn.close()
