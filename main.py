@@ -26,7 +26,7 @@ async def main():
     dp.include_router(admin_router)
 
     # Set up the scheduler for weekly pairings
-    scheduler = AsyncIOScheduler(timezone="UTC")
+    scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
     # Schedule the pairing job at the configured day/time every week
     try:
         scheduler.add_job(
