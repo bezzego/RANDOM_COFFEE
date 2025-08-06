@@ -280,6 +280,12 @@ async def on_confirm_registration(call: CallbackQuery, state: FSMContext):
 async def cmd_profile(message: Message):
     user_id = message.from_user.id
     user_data = db.get_user(user_id)
+    if not user_data:
+        await message.answer(
+            "❌ Вы не зарегистрированы в системе или были удалены.\n"
+            "Используйте /start для регистрации."
+        )
+        return
     _, _, first_name, last_name, full_name, position, department, *_ = user_data
 
     profile_kb = InlineKeyboardMarkup(

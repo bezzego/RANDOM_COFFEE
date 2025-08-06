@@ -516,16 +516,22 @@ async def on_admin_message(message: Message, bot: Bot):
 # --- Новый обработчик: Удаление пользователя ---
 
 
-@admin_router.callback_query(F.data == "admin_delete_user")
+@admin_router.callback_query(F.data.startswith("admin_delete_user"))
 async def on_admin_delete_user(call: CallbackQuery):
     if call.from_user.id not in ADMIN_IDS:
         await call.answer("⛔ Нет доступа", show_alert=True)
         return
 
+    page = int(call.data.split(":")[1]) if ":" in call.data else 0
     users = db.get_all_users()
     if not users:
         await call.message.answer("ℹ️ Нет зарегистрированных пользователей.")
         return
+
+    per_page = 10
+    start = page * per_page
+    end = start + per_page
+    selected_users = users[start:end]
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -535,14 +541,33 @@ async def on_admin_delete_user(call: CallbackQuery):
                     callback_data=f"admin_delete_confirm:{u[0]}",
                 )
             ]
-            for u in users[:10]  # только первые 10
+            for u in selected_users
         ]
-        + [[InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_to_menu")]]
+        + [
+            [
+                (
+                    InlineKeyboardButton(
+                        text="⬅️", callback_data=f"admin_delete_user:{page-1}"
+                    )
+                    if page > 0
+                    else InlineKeyboardButton(text=" ", callback_data="noop")
+                ),
+                (
+                    InlineKeyboardButton(
+                        text="➡️", callback_data=f"admin_delete_user:{page+1}"
+                    )
+                    if end < len(users)
+                    else InlineKeyboardButton(text=" ", callback_data="noop")
+                ),
+            ],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_to_menu")],
+        ]
     )
 
     await call.message.edit_text(
         f"{hbold('🗑 Удаление пользователя')}\n\n"
-        "Выберите пользователя для удаления (показаны первые 10):",
+        f"Страница {page+1}, всего пользователей: {len(users)}.\n"
+        "Выберите пользователя для удаления:",
         reply_markup=keyboard,
     )
     await call.answer()
@@ -557,7 +582,21 @@ async def on_admin_delete_confirm(call: CallbackQuery):
     user_id = int(call.data.split(":")[1])
     db.delete_user(user_id)
 
+    try:
+        await call.bot.send_message(
+            chat_id=user_id,
+            text="❌ Вы были удалены из Random Coffee администратором.\n"
+            "Если хотите вернуться — используйте /start.",
+        )
+    except Exception as e:
+        logging.error(f"Failed to notify deleted user {user_id}: {e}")
+
     await call.message.edit_text(
         f"✅ Пользователь {user_id} удален.", reply_markup=get_admin_keyboard()
     )
+    await call.answer()
+
+
+@admin_router.callback_query(F.data == "noop")
+async def on_noop(call: CallbackQuery):
     await call.answer()
