@@ -63,13 +63,30 @@ async def cmd_start(message: Message, state: FSMContext):
     user_id = message.from_user.id
     existing_user = db.get_user(user_id)
 
-    if existing_user and existing_user[9]:  # is_active
-        text = (
-            f"С возвращением! Вы уже зарегистрированы в Random Coffee.\n"
-            f"Используйте /profile для просмотра или изменения данных."
-        )
-        await message.answer(text)
-        return
+    if existing_user:
+        if existing_user[9]:  # is_active
+            text = (
+                f"С возвращением! Вы уже зарегистрированы в Random Coffee.\n"
+                f"Используйте /profile для просмотра или изменения данных."
+            )
+            await message.answer(text)
+            return
+        else:
+            reactivate_kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔄 Вернуться", callback_data="reactivate_user"
+                        )
+                    ]
+                ]
+            )
+            await message.answer(
+                "👋 Вы ранее отписались от Random Coffee.\n"
+                "Нажмите кнопку ниже, чтобы снова участвовать.",
+                reply_markup=reactivate_kb,
+            )
+            return
 
     text = (
         "Привет! 👋 Добро пожаловать в Random Coffee!\n"
@@ -513,4 +530,19 @@ async def on_after_registration(call: CallbackQuery):
     )
 
     await call.message.edit_text(text, reply_markup=complete_kb)
+    await call.answer()
+
+
+# Реактивация пользователя
+@user_router.callback_query(F.data == "reactivate_user")
+async def on_reactivate_user(call: CallbackQuery):
+    user_id = call.from_user.id
+    db.reactivate_user(user_id)  # функция меняет is_active на True
+
+    text = (
+        f"{hbold('🎉 Вы снова участвуете в Random Coffee!')}\n\n"
+        "На следующей неделе вы получите нового собеседника.\n\n"
+        "Используйте /profile для проверки и обновления данных."
+    )
+    await call.message.edit_text(text)
     await call.answer()

@@ -204,6 +204,15 @@ def delete_user(user_id: int) -> bool:
         return cur.rowcount > 0
 
 
+def reactivate_user(user_id: int) -> bool:
+    """Reactivate a previously deactivated user."""
+    with conn:
+        cur = conn.execute(
+            "UPDATE participants SET is_active = TRUE WHERE user_id = ?", (user_id,)
+        )
+        return cur.rowcount > 0
+
+
 def close_connection():
     """Properly close database connection."""
     conn.close()
