@@ -21,8 +21,32 @@ admin_router = Router()
 awaiting_actions = {}  # user_id: action_type
 
 # Scheduler for reminders
+
 scheduler = AsyncIOScheduler()
 scheduler.start()
+
+# --- helpers for long outputs ---
+
+
+def chunk_list(lst, size):
+    """Yield successive chunks from list with max length `size`."""
+    for i in range(0, len(lst), size):
+        yield lst[i : i + size]
+
+
+def split_text_by_limit(lines, header="", limit=4000):
+    """Split a list of text lines into chunks respecting Telegram 4096 char limit."""
+    chunks = []
+    current = header
+    for line in lines:
+        if len(current) + len(line) + 1 > limit:
+            chunks.append(current)
+            current = header + line + "\n"
+        else:
+            current += line + "\n"
+    if current:
+        chunks.append(current)
+    return chunks
 
 
 def get_admin_keyboard():
@@ -297,26 +321,36 @@ async def on_admin_list(call: CallbackQuery):
     total = len(rows)
     active = sum(1 for row in rows if row[0] in eligible)
 
-    text = (
+    header = (
         f"{hbold('👥 Участники Random Coffee')}\n\n"
         f"• Всего участников: {total}\n"
         f"• Активных (готовых к жеребьевке): {active}\n"
         f"• Неактивных: {total - active}\n\n"
-        f"{hbold('Последние 10 участников:')}\n"
     )
 
-    for row in rows[:10]:
+    # Сформируем строки списка для ВСЕХ пользователей
+    lines = []
+    for row in rows:
         user_id, username, full_name, frequency, last_participation = row
         status = "✅" if user_id in eligible else "⏸"
         username_display = f"@{username}" if username else "нет username"
         last_part = (
             f", последний раз: {last_participation}" if last_participation else ""
         )
-        text += f"{status} {full_name} ({username_display}){last_part}\n"
+        freq_part = f", раз в {frequency} недель" if frequency is not None else ""
+        lines.append(f"{status} {full_name} ({username_display}){freq_part}{last_part}")
 
-    if total > 10:
-        text += f"\n...и ещё {total - 10} участников"
+    # Разобьём вывод на несколько сообщений, чтобы показать всех
+    chunks = split_text_by_limit(lines, header=header, limit=4000)
 
+    # Перепишем исходное сообщение шапкой и первой порцией (если поместится)
+    if chunks:
+        await call.message.edit_text(chunks[0])
+        # Остальные части отправим отдельными сообщениями
+        for part in chunks[1:]:
+            await call.message.answer(part)
+
+    # Кнопки действий отдельным сообщением
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -327,8 +361,7 @@ async def on_admin_list(call: CallbackQuery):
             [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_to_menu")],
         ]
     )
-
-    await call.message.edit_text(text, reply_markup=keyboard)
+    await call.message.answer("Выберите действие:", reply_markup=keyboard)
 
 
 @admin_router.callback_query(F.data == "admin_stats")
@@ -522,54 +555,37 @@ async def on_admin_delete_user(call: CallbackQuery):
         await call.answer("⛔ Нет доступа", show_alert=True)
         return
 
-    page = int(call.data.split(":")[1]) if ":" in call.data else 0
     users = db.get_all_users()
     if not users:
         await call.message.answer("ℹ️ Нет зарегистрированных пользователей.")
         return
 
-    per_page = 10
-    start = page * per_page
-    end = start + per_page
-    selected_users = users[start:end]
+    # Сообщение-инструкция
+    await call.message.edit_text(
+        f"{hbold('🗑 Удаление пользователя')}\n\n"
+        "Ниже показаны ВСЕ пользователи. Нажмите на имя, чтобы удалить.\n"
+        "(Список разбит на несколько сообщений, если пользователей много.)"
+    )
 
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
+    # Телеграм ограничивает размер клавиатуры, поэтому отправляем несколько сообщений по 45 кнопок
+    for idx, chunk in enumerate(chunk_list(users, 45)):
+        keyboard_rows = [
             [
                 InlineKeyboardButton(
-                    text=f"{u[2]} (@{u[1]})" if u[1] else u[2],
+                    text=(f"{u[2]} (@{u[1]})" if u[1] else u[2]),
                     callback_data=f"admin_delete_confirm:{u[0]}",
                 )
             ]
-            for u in selected_users
+            for u in chunk
         ]
-        + [
-            [
-                (
-                    InlineKeyboardButton(
-                        text="⬅️", callback_data=f"admin_delete_user:{page-1}"
-                    )
-                    if page > 0
-                    else InlineKeyboardButton(text=" ", callback_data="noop")
-                ),
-                (
-                    InlineKeyboardButton(
-                        text="➡️", callback_data=f"admin_delete_user:{page+1}"
-                    )
-                    if end < len(users)
-                    else InlineKeyboardButton(text=" ", callback_data="noop")
-                ),
-            ],
-            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_to_menu")],
-        ]
-    )
+        keyboard_rows.append(
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_to_menu")]
+        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+        await call.message.answer(
+            f"Список для удаления — часть {idx+1}", reply_markup=keyboard
+        )
 
-    await call.message.edit_text(
-        f"{hbold('🗑 Удаление пользователя')}\n\n"
-        f"Страница {page+1}, всего пользователей: {len(users)}.\n"
-        "Выберите пользователя для удаления:",
-        reply_markup=keyboard,
-    )
     await call.answer()
 
 
