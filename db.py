@@ -32,6 +32,19 @@ conn.execute(
     """
 )
 
+# Table schema for storing weekly pairs
+conn.execute(
+    """
+    CREATE TABLE IF NOT EXISTS pairs (
+        user_id INTEGER,
+        partner_id INTEGER,
+        week_date TEXT,
+        PRIMARY KEY (user_id, week_date)
+    )
+    """
+)
+conn.commit()
+
 
 def ensure_schema():
     """Ensure all required columns exist with proper constraints."""
@@ -146,6 +159,37 @@ def get_all_users(include_inactive: bool = False) -> List[Tuple]:
     return cur.fetchall()
 
 
+def get_all_active_users() -> List[Tuple]:
+    """
+    Возвращает список активных участников.
+    Порядок колонок согласован с обработчиками рассылок:
+    [user_id, username, first_name, last_name, full_name, position, department, last_participation, frequency, is_active]
+    """
+    cur = conn.execute(
+        "SELECT user_id, username, first_name, last_name, full_name, "
+        "position, department, last_participation, frequency, is_active "
+        "FROM participants WHERE is_active = TRUE"
+    )
+    return cur.fetchall()
+
+
+def set_active(user_id: int, active: bool) -> bool:
+    """Установить активность пользователя (зелёный статус).
+    Возвращает True, если запись обновлена.
+    """
+    with conn:
+        cur = conn.execute(
+            "UPDATE participants SET is_active = ? WHERE user_id = ?",
+            (1 if active else 0, user_id),
+        )
+        updated = cur.rowcount > 0
+        if not updated:
+            print(
+                f"[DB] set_active: пользователь {user_id} не найден, обновление не выполнено"
+            )
+        return updated
+
+
 def update_last_participation(user_ids: List[int]):
     """Update last participation date for given users."""
     today = datetime.date.today().isoformat()
@@ -211,6 +255,33 @@ def reactivate_user(user_id: int) -> bool:
             "UPDATE participants SET is_active = TRUE WHERE user_id = ?", (user_id,)
         )
         return cur.rowcount > 0
+
+
+def get_current_partner(user_id: int) -> Optional[dict]:
+    """
+    Возвращает словарь с информацией о текущем напарнике пользователя.
+    Формат: {"user_id": ..., "username": ..., "full_name": ...}
+    """
+    try:
+        cur = conn.execute(
+            "SELECT partner_id FROM pairs WHERE user_id = ? ORDER BY week_date DESC LIMIT 1",
+            (user_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        partner_id = row[0]
+        partner = get_user(partner_id)
+        if not partner:
+            return None
+        return {
+            "user_id": partner[0],
+            "username": partner[1],
+            "full_name": partner[4],
+        }
+    except Exception as e:
+        print(f"get_current_partner error: {e}")
+        return None
 
 
 def close_connection():

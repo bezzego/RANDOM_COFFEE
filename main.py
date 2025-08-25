@@ -6,11 +6,12 @@ Sets up the bot, scheduler, and starts polling.
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
+from zoneinfo import ZoneInfo
 
 from config import BOT_TOKEN, SCHEDULE_DAY, SCHEDULE_HOUR, SCHEDULE_MINUTE
 import db  # initialize database connection
 from admin_handlers import admin_router, pair_users
-from user_handlers import user_router
+from user_handlers import user_router, send_weekly_reminders
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -26,7 +27,7 @@ async def main():
     dp.include_router(admin_router)
 
     # Set up the scheduler for weekly pairings
-    scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
+    scheduler = AsyncIOScheduler(timezone=ZoneInfo("Europe/Moscow"))
     # Schedule the pairing job at the configured day/time every week
     try:
         scheduler.add_job(
@@ -39,6 +40,23 @@ async def main():
         )
     except Exception as e:
         logging.error(f"Failed to schedule pairing job: {e}")
+    # ВРЕМЕННО для теста: запуск каждый будний день в 11:16 по Москве
+    # TODO: revert to Wednesday 10:00 afterwards
+    try:
+        scheduler.add_job(
+            send_weekly_reminders,
+            "cron",
+            args=[bot],
+            day_of_week="wed",
+            hour=10,
+            minute=15,
+            id="weekly_reminder_wed_10",
+            replace_existing=True,
+            coalesce=True,
+            misfire_grace_time=3600,
+        )
+    except Exception as e:
+        logging.error(f"Failed to schedule weekly reminder job: {e}")
     scheduler.start()
     logging.info(
         f"Scheduler started: weekly pairing every {SCHEDULE_DAY} at {SCHEDULE_HOUR:02d}:{SCHEDULE_MINUTE:02d}."
@@ -49,7 +67,7 @@ async def main():
         await dp.start_polling(bot)
     finally:
         # Shutdown scheduler and close DB connection on exit
-        scheduler.shutdown()
+        scheduler.shutdown(wait=False)
         db.conn.close()
 
 
