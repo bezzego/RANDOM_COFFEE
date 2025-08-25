@@ -40,8 +40,6 @@ async def main():
         )
     except Exception as e:
         logging.error(f"Failed to schedule pairing job: {e}")
-    # ВРЕМЕННО для теста: запуск каждый будний день в 11:16 по Москве
-    # TODO: revert to Wednesday 10:00 afterwards
     try:
         scheduler.add_job(
             send_weekly_reminders,
@@ -49,7 +47,7 @@ async def main():
             args=[bot],
             day_of_week="wed",
             hour=10,
-            minute=15,
+            minute=0,
             id="weekly_reminder_wed_10",
             replace_existing=True,
             coalesce=True,
