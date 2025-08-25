@@ -9,6 +9,7 @@ from aiogram.types import (
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.markdown import hbold, hitalic
+import logging
 import db
 
 
@@ -429,8 +430,22 @@ async def on_paired_confirmed(call: CallbackQuery):
     await call.answer()
 
 
-@user_router.callback_query(F.data == "continue_participation")
+@user_router.callback_query(
+    (F.data == "continue_participation")
+    | (F.data == "continue_yes")
+    | (F.data == "continue")
+    | (F.data == "participation_on")
+)
 async def on_continue_participation(call: CallbackQuery):
+    user_id = call.from_user.id
+    try:
+        updated = db.set_active(user_id, True)
+        if updated:
+            logging.info(f"[CONTINUE] user_id={user_id} -> is_active=1 (updated)")
+        else:
+            logging.warning(f"[CONTINUE] user_id={user_id} -> update failed (no rows)")
+    except Exception as e:
+        logging.exception(f"set_active failed for user_id={user_id}: {e}")
     text = "✅ Вы продолжите участие в Random Coffee! Новая пара будет в следующий понедельник."
     await call.message.edit_text(text)
     await call.answer()
@@ -444,7 +459,8 @@ async def send_reminder_after_pairing(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="✉️ Написать напарнику", url=f"https://t.me/{partner_contact}"
+                    text="✉️ Написать напарнику",
+                    url=f"https://t.me/{partner_contact.lstrip('@')}",
                 )
             ],
             [
@@ -464,6 +480,95 @@ async def send_reminder_after_pairing(
     )
 
     await bot.send_message(chat_id=user_id, text=text, reply_markup=kb)
+
+
+# Еженедельное напоминание (используется планировщиком в main.py)
+async def send_weekly_reminders(bot):
+    """
+    Рассылает напоминание всем активным участникам Random Coffee.
+    Сообщение нейтральное, с кнопками:
+      • «✉️ Написать напарнику» (открывает чат)
+      • «✅ Договорились» (фиксирует продолжение участия)
+    """
+    logging.info("Starting weekly reminders job…")
+    try:
+        users = db.get_all_active_users()  # [(user_id, username, ... , is_active), ...]
+    except Exception as e:
+        logging.exception(f"get_all_active_users failed: {e}")
+        users = []
+
+    if not users:
+        logging.info("No active users for weekly reminders.")
+        return
+
+    for row in users:
+        user_id = row[0]
+        partner = db.get_current_partner(user_id)
+        # Build keyboard depending on partner existence and username
+        kb_buttons = []
+        if partner and partner.get("username"):
+            partner_username = partner["username"].lstrip("@")
+            kb_buttons.append(
+                [
+                    InlineKeyboardButton(
+                        text="✉️ Написать напарнику",
+                        url=f"https://t.me/{partner_username}",
+                    )
+                ]
+            )
+        # Always add the "Договорились" button
+        kb_buttons.append(
+            [
+                InlineKeyboardButton(
+                    text="✅ Договорились", callback_data="paired_confirmed"
+                )
+            ]
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=kb_buttons)
+        text = (
+            "👋 Привет!\n"
+            "Напоминаем, что ты участвуешь в Random Coffee на этой неделе ☕\n\n"
+            "Если ещё не договорился(ась) о встрече — напиши своему напарнику, это займёт меньше минуты :)\n\n"
+            "Цель — просто пообщаться. Узнать лучше своего коллегу: чем он занимается, что делает на работе, чем увлекается в свободное время.\n\n"
+            "Удачной встречи!"
+        )
+        try:
+            await bot.send_message(chat_id=user_id, text=text, reply_markup=kb)
+            logging.info(f"Weekly reminder -> user_id={user_id}")
+        except Exception as e:
+            logging.exception(
+                f"Failed to send weekly reminder to user_id={user_id}: {e}"
+            )
+            continue
+
+
+# Handler: Открыть чат с напарником (по username)
+@user_router.callback_query(F.data == "open_partner_chat")
+async def open_partner_chat(call: CallbackQuery):
+    user_id = call.from_user.id
+    try:
+        partner = db.get_current_partner(user_id)
+    except Exception as e:
+        logging.exception(f"get_current_partner failed for user_id={user_id}: {e}")
+        partner = None
+
+    if not partner or not partner.get("username"):
+        await call.answer(
+            "Партнёр ещё не назначен или у него нет username.", show_alert=True
+        )
+        return
+
+    username = partner["username"].lstrip("@")
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="✉️ Открыть чат", url=f"https://t.me/{username}")]
+        ]
+    )
+    await call.message.answer(
+        f"Ваш напарник на этой неделе: {partner.get('full_name','Без имени')} (@{username})",
+        reply_markup=kb,
+    )
+    await call.answer()
 
 
 @user_router.callback_query(F.data == "profile_info")
