@@ -21,8 +21,9 @@ admin_router = Router()
 awaiting_actions = {}  # user_id: action_type
 
 # Scheduler for reminders
+from zoneinfo import ZoneInfo
 
-scheduler = AsyncIOScheduler()
+scheduler = AsyncIOScheduler(timezone=ZoneInfo("Europe/Moscow"))
 scheduler.start()
 
 # --- helpers for long outputs ---
@@ -126,8 +127,8 @@ async def pair_users(bot: Bot, force_all=False) -> dict:
         name2 = user2[2] if len(user2) > 2 else "Неизвестно"
 
         # Обработка username для корректной передачи в напоминание (без @, не пустой)
-        uname1_clean = uname1.strip("@") if uname1 else "username_not_available"
-        uname2_clean = uname2.strip("@") if uname2 else "username_not_available"
+        uname1_clean = uname1.lstrip("@") if uname1 else ""
+        uname2_clean = uname2.lstrip("@") if uname2 else ""
 
         position2 = user2[3] if len(user2) > 3 and user2[3] else "не указан"
         department2 = user2[4] if len(user2) > 4 and user2[4] else "не указан"
@@ -164,7 +165,9 @@ async def pair_users(bot: Bot, force_all=False) -> dict:
             await bot.send_message(uid1, partner_msg_1)
             await bot.send_message(uid2, partner_msg_2)
             # Запланировать напоминание через 3 дня
-            run_date = datetime.datetime.now() + datetime.timedelta(days=3)
+            run_date = datetime.datetime.now(
+                ZoneInfo("Europe/Moscow")
+            ) + datetime.timedelta(days=3)
             scheduler.add_job(
                 send_reminder_after_pairing,
                 trigger="date",
@@ -308,6 +311,7 @@ async def on_admin_list(call: CallbackQuery):
     await call.answer("⏳ Загружаем список участников...")
 
     eligible = {u[0] for u in db.get_eligible_users()}
+    active = {u[0] for u in db.get_all_active_users()}
     cur = db.conn.execute(
         "SELECT user_id, username, full_name, frequency, last_participation FROM participants ORDER BY full_name"
     )
@@ -319,20 +323,27 @@ async def on_admin_list(call: CallbackQuery):
         return
 
     total = len(rows)
-    active = sum(1 for row in rows if row[0] in eligible)
+    active_count = sum(1 for row in rows if row[0] in active)
+    eligible_count = sum(1 for row in rows if row[0] in eligible)
 
     header = (
         f"{hbold('👥 Участники Random Coffee')}\n\n"
         f"• Всего участников: {total}\n"
-        f"• Активных (готовых к жеребьевке): {active}\n"
-        f"• Неактивных: {total - active}\n\n"
+        f"• Активных: {active_count}\n"
+        f"• Готовых к жеребьевке: {eligible_count}\n"
+        f"• Неактивных: {total - active_count}\n\n"
     )
 
     # Сформируем строки списка для ВСЕХ пользователей
     lines = []
     for row in rows:
         user_id, username, full_name, frequency, last_participation = row
-        status = "✅" if user_id in eligible else "⏸"
+        if user_id in eligible:
+            status = "✅"
+        elif user_id in active:
+            status = "☑️"  # активен, но не eligible по дате/частоте
+        else:
+            status = "⏸"
         username_display = f"@{username}" if username else "нет username"
         last_part = (
             f", последний раз: {last_participation}" if last_participation else ""
