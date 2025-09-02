@@ -98,34 +98,8 @@ async def pair_users(bot: Bot, force_all: bool = False, include_active_also: boo
         "failed_to_notify": list
     }
     """
-    def _merge_unique_by_id(a, b):
-        # each item is a tuple/list with user_id at index 0
-        seen = {}
-        for it in a:
-            seen[it[0]] = it
-        for it in b:
-            seen[it[0]] = it
-        return list(seen.values())
-
-    logging.info(
-        "pair_users called: force_all=%s include_active_also=%s",
-        force_all,
-        include_active_also,
-    )
-
-    if force_all:
-        users = db.get_all_users()
-    else:
-        # default weekly behavior — eligible participants
-        users = db.get_eligible_users()
-        # if requested, also include all currently active users (union by id)
-        if include_active_also:
-            active = db.get_all_active_users()
-            users = _merge_unique_by_id(users, active)
-
-    logging.info(
-        "pair_users selection: eligible+active set size=%s", len(users)
-    )
+    # When forcing pairing from admin panel, explicitly request only active users
+    users = db.get_all_users(include_inactive=False) if force_all else db.get_eligible_users()
     result = {
         "pairs_count": 0,
         "users_paired": 0,
@@ -244,10 +218,20 @@ async def pair_users(bot: Bot, force_all: bool = False, include_active_also: boo
     return result
 
 
-# Wrapper for Monday scheduler: include both eligible and active users
-async def pair_users_monday(bot: Bot) -> dict:
-    """Pairing mode for Mondays: include both eligible and active users."""
-    return await pair_users(bot, force_all=False, include_active_also=True)
+async def pair_users_monday(bot: Bot):
+    """
+    Wrapper to be scheduled weekly from main.py.
+    Calls pair_users and logs a short summary.
+    """
+    logging.info("Weekly pairing job started.")
+    try:
+        result = await pair_users(bot, force_all=False)
+        logging.info(
+            f"Weekly pairing finished: pairs={result.get('pairs_count',0)}, "
+            f"paired={result.get('users_paired',0)}, without_pair={result.get('users_without_pair',0)}"
+        )
+    except Exception as e:
+        logging.exception(f"pair_users_monday failed: {e}")
 
 
 @admin_router.callback_query(F.data == "admin_pair_force")
