@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from config import BOT_TOKEN, SCHEDULE_DAY, SCHEDULE_HOUR, SCHEDULE_MINUTE
 import db  # initialize database connection
-from admin_handlers import admin_router, pair_users
+from admin_handlers import admin_router, pair_users, pair_users_monday
 from user_handlers import user_router, send_weekly_reminders
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -31,7 +31,7 @@ async def main():
     # Schedule the pairing job at the configured day/time every week
     try:
         scheduler.add_job(
-            pair_users,
+            pair_users_monday,
             "cron",
             args=[bot],
             day_of_week=SCHEDULE_DAY,

@@ -87,7 +87,7 @@ async def cmd_admin_menu(message: Message):
     await message.answer(text, reply_markup=get_admin_keyboard())
 
 
-async def pair_users(bot: Bot, force_all=False) -> dict:
+async def pair_users(bot: Bot, force_all: bool = False, include_active_also: bool = False) -> dict:
     """
     Формирует пары пользователей
     Возвращает словарь с результатами:
@@ -98,7 +98,34 @@ async def pair_users(bot: Bot, force_all=False) -> dict:
         "failed_to_notify": list
     }
     """
-    users = db.get_all_users() if force_all else db.get_eligible_users()
+    def _merge_unique_by_id(a, b):
+        # each item is a tuple/list with user_id at index 0
+        seen = {}
+        for it in a:
+            seen[it[0]] = it
+        for it in b:
+            seen[it[0]] = it
+        return list(seen.values())
+
+    logging.info(
+        "pair_users called: force_all=%s include_active_also=%s",
+        force_all,
+        include_active_also,
+    )
+
+    if force_all:
+        users = db.get_all_users()
+    else:
+        # default weekly behavior — eligible participants
+        users = db.get_eligible_users()
+        # if requested, also include all currently active users (union by id)
+        if include_active_also:
+            active = db.get_all_active_users()
+            users = _merge_unique_by_id(users, active)
+
+    logging.info(
+        "pair_users selection: eligible+active set size=%s", len(users)
+    )
     result = {
         "pairs_count": 0,
         "users_paired": 0,
@@ -215,6 +242,12 @@ async def pair_users(bot: Bot, force_all=False) -> dict:
         db.update_last_participation(paired_ids)
 
     return result
+
+
+# Wrapper for Monday scheduler: include both eligible and active users
+async def pair_users_monday(bot: Bot) -> dict:
+    """Pairing mode for Mondays: include both eligible and active users."""
+    return await pair_users(bot, force_all=False, include_active_also=True)
 
 
 @admin_router.callback_query(F.data == "admin_pair_force")
